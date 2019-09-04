@@ -2,32 +2,36 @@ module Trafikinformation
   ( main
   ) where
 
-import           Control.Concurrent (threadDelay)
-import           Control.Monad      (join)
-import           TrafikLib.Fetching (fetchItems)
-import           TrafikLib.ParseRss (Item, title, url)
-import           TrafikLib.Play     (playUrl)
+import           Control.Monad             (join)
+import           Control.Monad.Reader      (ReaderT (..), ask, asks)
+import           Control.Monad.Trans.Class (lift)
+import           TrafikLib.ParseRss        (Item (..))
+import           TrafikLib.TrafikConfig    (TrafikConfig (..), defaultConfig)
 
 main :: IO ()
 main = do
   putStrLn "Starting..."
-  initialItems >>= bodyLoop
+  runReaderT execUntilNoItems defaultConfig
   putStrLn "Exiting..."
   return ()
 
-initialItems :: IO (Either String [Item])
-initialItems = withFetchingItems id
+execUntilNoItems :: ReaderT TrafikConfig IO ()
+execUntilNoItems = initialItems >>= bodyLoop
 
-bodyLoop :: Either String [Item] -> IO ()
-bodyLoop (Left err) = putStrLn err
-bodyLoop (Right prevItems) = sleep60s >> body prevItems >>= bodyLoop
-  where
-    sleep60s = threadDelay (60 * 1000 * 1000)
+initialItems :: ReaderT TrafikConfig IO (Either String [Item])
+initialItems = asks fetchFunction >>= lift
 
-body :: [Item] -> IO (Either String [Item])
+bodyLoop :: Either String [Item] -> ReaderT TrafikConfig IO ()
+bodyLoop (Left err) = lift $ putStrLn err
+bodyLoop (Right prevItems) = do
+  asks sleepFunction >>= lift
+  currItems <- body prevItems
+  bodyLoop currItems
+
+body :: [Item] -> ReaderT TrafikConfig IO (Either String [Item])
 body prevItems = do
-  putStrLn "loop"
-  eitherItems <- fetchItems
+  lift $ putStrLn "loop"
+  eitherItems <- asks fetchFunction >>= lift
   case eitherItems of
     Left err -> return $ Left err
     Right [] -> return $ Left "body: No items"
@@ -36,18 +40,14 @@ body prevItems = do
       play $ reverse diffItems
       return . Right $ currItems
 
-withFetchingItems :: ([Item] -> a) -> IO (Either String a)
-withFetchingItems f = do
-  eitherItems <- fetchItems
-  return $ f <$> eitherItems
-
 getDiffItems :: [Item] -> [Item] -> [Item]
 getDiffItems []            = id
 getDiffItems (latestOld:_) = takeWhile ((title latestOld /=) . title)
 
-play :: [Item] -> IO ()
+play :: [Item] -> ReaderT TrafikConfig IO ()
 play [] = return ()
-play (x:xs) = do
-  putStrLn $ "Playing: " ++ title x
-  playUrl (url x)
+play (Item title url:xs) = do
+  playFunction' <- asks playFunction
+  lift $ putStrLn ("Playing: " ++ title)
+  lift $ playFunction' url
   play xs

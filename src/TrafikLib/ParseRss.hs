@@ -1,8 +1,6 @@
 module TrafikLib.ParseRss
   ( parseRss
-  , Item
-  , title
-  , url
+  , Item(..)
   , firstLeftOrRights -- TODO write tests
   ) where
 
