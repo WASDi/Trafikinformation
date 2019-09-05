@@ -9,13 +9,13 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Trafikinformation
+      Trafikinformation,
+      TrafikLib.ParseRss,
+      TrafikLib.TrafikConfig
   other-modules:
       Paths_trafikinformation,
       TrafikLib.Fetching,
-      TrafikLib.ParseRss,
-      TrafikLib.Play,
-      TrafikLib.TrafikConfig
+      TrafikLib.Play
   hs-source-dirs:
       src
   build-depends:
@@ -49,5 +49,7 @@ test-suite trafikinformation-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , HUnit
+    , mtl
     , trafikinformation
   default-language: Haskell2010

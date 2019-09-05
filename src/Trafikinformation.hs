@@ -1,5 +1,6 @@
 module Trafikinformation
   ( main
+  , execUntilNoItems
   ) where
 
 import           Control.Monad             (join)
@@ -11,26 +12,37 @@ import           TrafikLib.TrafikConfig    (TrafikConfig (..), defaultConfig)
 main :: IO ()
 main = do
   putStrLn "Starting..."
-  runReaderT execUntilNoItems defaultConfig
+  execUntilNoItems defaultConfig
   putStrLn "Exiting..."
   return ()
 
-execUntilNoItems :: ReaderT TrafikConfig IO ()
-execUntilNoItems = initialItems >>= bodyLoop
+type TrafikApp m = ReaderT (TrafikConfig m) m
 
-initialItems :: ReaderT TrafikConfig IO (Either String [Item])
-initialItems = asks fetchFunction >>= lift
+execUntilNoItems :: (Monad m) => TrafikConfig m -> m ()
+execUntilNoItems = runReaderT (initialItems >>= bodyLoop)
 
-bodyLoop :: Either String [Item] -> ReaderT TrafikConfig IO ()
-bodyLoop (Left err) = lift $ putStrLn err
+initialItems :: (Monad m) => TrafikApp m (Either String [Item])
+initialItems = do
+  eitherItems <- asks fetchFunction >>= lift
+  logFunction' <- asks logFunction
+  case eitherItems of
+    Left err -> return $ Left err
+    Right [] -> return $ Left "initialItems: No items"
+    Right currItems@(first:_) -> do
+      lift $ logFunction' ("Initial item: " ++ title first)
+      return $ Right currItems
+
+bodyLoop :: (Monad m) => Either String [Item] -> TrafikApp m ()
+bodyLoop (Left err) = asks logFunction >>= lift . ($ err)
 bodyLoop (Right prevItems) = do
   asks sleepFunction >>= lift
   currItems <- body prevItems
   bodyLoop currItems
 
-body :: [Item] -> ReaderT TrafikConfig IO (Either String [Item])
+body :: (Monad m) => [Item] -> TrafikApp m (Either String [Item])
 body prevItems = do
-  lift $ putStrLn "loop"
+  logFunction' <- asks logFunction
+  lift $ logFunction' "loop"
   eitherItems <- asks fetchFunction >>= lift
   case eitherItems of
     Left err -> return $ Left err
@@ -44,10 +56,11 @@ getDiffItems :: [Item] -> [Item] -> [Item]
 getDiffItems []            = id
 getDiffItems (latestOld:_) = takeWhile ((title latestOld /=) . title)
 
-play :: [Item] -> ReaderT TrafikConfig IO ()
+play :: (Monad m) => [Item] -> TrafikApp m ()
 play [] = return ()
 play (Item title url:xs) = do
   playFunction' <- asks playFunction
-  lift $ putStrLn ("Playing: " ++ title)
+  logFunction' <- asks logFunction
+  lift $ logFunction' ("Playing: " ++ title)
   lift $ playFunction' url
   play xs

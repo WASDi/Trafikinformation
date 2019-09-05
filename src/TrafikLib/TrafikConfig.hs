@@ -5,13 +5,19 @@ import           TrafikLib.Fetching (fetchItems)
 import           TrafikLib.ParseRss (Item)
 import           TrafikLib.Play     (playUrl)
 
-data TrafikConfig =
+data TrafikConfig m =
   TrafikConfig
-    { fetchFunction :: IO (Either String [Item])
-    , sleepFunction :: IO ()
-    , playFunction  :: String -> IO ()
+    { fetchFunction :: m (Either String [Item])
+    , sleepFunction :: m ()
+    , playFunction  :: String -> m ()
+    , logFunction   :: String -> m ()
     }
 
-defaultConfig :: TrafikConfig
+defaultConfig :: TrafikConfig IO
 defaultConfig =
-  TrafikConfig {fetchFunction = fetchItems, sleepFunction = threadDelay (60 * 1000 * 1000), playFunction = playUrl}
+  TrafikConfig
+    { fetchFunction = fetchItems
+    , sleepFunction = threadDelay (60 * 1000 * 1000)
+    , playFunction = playUrl
+    , logFunction = putStrLn
+    }
